@@ -1,0 +1,295 @@
+# 專案結構
+.
+├── README.md
+├── ansible/
+│   ├── inventory
+│   └── playbooks/
+│       ├── setup-prerequisites.yml
+│       └── deploy-monitoring.yml
+├── app/
+│   ├── Dockerfile
+│   └── main.py
+├── k8s/
+│   ├── app-deployment.yml
+│   ├── logstash/
+│   │   ├── configmap.yml
+│   │   └── deployment.yml
+│   └── prometheus/
+│       ├── configmap.yml
+│       └── deployment.yml
+└── pipeline/
+    ├── Jenkinsfile
+    └── .gitlab-ci.yml
+
+# 1. 示例應用 (app/main.py)
+```python
+from flask import Flask
+import logging
+import prometheus_client
+from prometheus_client import Counter, generate_latest
+
+app = Flask(__name__)
+
+# 設置日誌
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+)
+logger = logging.getLogger(__name__)
+
+# Prometheus metrics
+REQUEST_COUNT = Counter('app_requests_total', 'Total app requests')
+
+@app.route('/')
+def hello():
+    REQUEST_COUNT.inc()
+    logger.info('Received request on root endpoint')
+    return 'Hello from POC App!'
+
+@app.route('/metrics')
+def metrics():
+    return generate_latest()
+
+if __name__ == '__main__':
+    app.run(host='0.0.0.0', port=8080)
+```
+
+# 2. Dockerfile
+```dockerfile
+FROM python:3.9-slim
+
+WORKDIR /app
+COPY requirements.txt .
+RUN pip install -r requirements.txt
+COPY . .
+
+EXPOSE 8080
+CMD ["python", "main.py"]
+```
+
+# 3. GitLab CI Pipeline (.gitlab-ci.yml)
+```yaml
+variables:
+  GCP_PROJECT_ID: "your-project-id"
+  GKE_CLUSTER_NAME: "your-cluster-name"
+  GKE_ZONE: "your-zone"
+  IMAGE_NAME: "poc-app"
+
+stages:
+  - build
+  - test
+  - deploy
+
+build:
+  stage: build
+  image: docker:20.10.16
+  services:
+    - docker:20.10.16-dind
+  script:
+    - docker build -t $IMAGE_NAME .
+    - docker tag $IMAGE_NAME gcr.io/$GCP_PROJECT_ID/$IMAGE_NAME:$CI_COMMIT_SHA
+    - echo $GCP_SA_KEY | docker login -u _json_key --password-stdin https://gcr.io
+    - docker push gcr.io/$GCP_PROJECT_ID/$IMAGE_NAME:$CI_COMMIT_SHA
+
+test:
+  stage: test
+  image: python:3.9-slim
+  script:
+    - pip install pytest
+    - pytest tests/
+
+deploy:
+  stage: deploy
+  image: google/cloud-sdk
+  script:
+    - echo $GCP_SA_KEY > gcp-key.json
+    - gcloud auth activate-service-account --key-file gcp-key.json
+    - gcloud container clusters get-credentials $GKE_CLUSTER_NAME --zone $GKE_ZONE --project $GCP_PROJECT_ID
+    - kubectl apply -f k8s/
+```
+
+# 4. Kubernetes 應用部署 (k8s/app-deployment.yml)
+```yaml
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: poc-app
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: poc-app
+  template:
+    metadata:
+      labels:
+        app: poc-app
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "8080"
+        prometheus.io/path: "/metrics"
+    spec:
+      containers:
+      - name: poc-app
+        image: gcr.io/your-project-id/poc-app:latest
+        ports:
+        - containerPort: 8080
+        volumeMounts:
+        - name: app-logs
+          mountPath: /app/logs
+      volumes:
+      - name: app-logs
+        emptyDir: {}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: poc-app-service
+spec:
+  selector:
+    app: poc-app
+  ports:
+  - port: 80
+    targetPort: 8080
+  type: LoadBalancer
+```
+
+# 5. Logstash 配置 (k8s/logstash/configmap.yml)
+```yaml
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: logstash-config
+data:
+  logstash.yml: |
+    http.host: "0.0.0.0"
+    path.config: /usr/share/logstash/pipeline
+  
+  logstash.conf: |
+    input {
+      file {
+        path => "/app/logs/*.log"
+        type => "poc-app-logs"
+      }
+    }
+    
+    output {
+      elasticsearch {
+        hosts => ["elasticsearch:9200"]
+        index => "poc-app-logs-%{+YYYY.MM.dd}"
+      }
+    }
+```
+
+# 6. Prometheus 配置 (k8s/prometheus/configmap.yml)
+```yaml
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: prometheus-config
+data:
+  prometheus.yml: |
+    global:
+      scrape_interval: 15s
+    
+    scrape_configs:
+      - job_name: 'kubernetes-pods'
+        kubernetes_sd_configs:
+          - role: pod
+        relabel_configs:
+          - source_labels: [__meta_kubernetes_pod_annotation_prometheus_io_scrape]
+            action: keep
+            regex: true
+          - source_labels: [__meta_kubernetes_pod_annotation_prometheus_io_path]
+            action: replace
+            target_label: __metrics_path__
+            regex: (.+)
+```
+
+# 7. Ansible Playbook (ansible/playbooks/setup-prerequisites.yml)
+```yaml
+---
+- name: Setup Prerequisites for POC
+  hosts: all
+  become: yes
+
+  tasks:
+    - name: Install required packages
+      apt:
+        name:
+          - docker.io
+          - python3-pip
+          - git
+        state: present
+        update_cache: yes
+
+    - name: Install docker-compose
+      pip:
+        name: docker-compose
+        state: present
+
+    - name: Add Google Cloud SDK repository
+      apt_repository:
+        repo: "deb [signed-by=/usr/share/keyrings/cloud.google.gpg] https://packages.cloud.google.com/apt cloud-sdk main"
+        state: present
+
+    - name: Import Google Cloud public key
+      apt_key:
+        url: https://packages.cloud.google.com/apt/doc/apt-key.gpg
+        state: present
+
+    - name: Install Google Cloud SDK
+      apt:
+        name: google-cloud-sdk
+        state: present
+        update_cache: yes
+
+    - name: Install kubectl
+      apt:
+        name: kubectl
+        state: present
+```
+
+# 8. Jenkins Pipeline (pipeline/Jenkinsfile)
+```groovy
+pipeline {
+    agent any
+    
+    environment {
+        GCP_PROJECT_ID = 'your-project-id'
+        GKE_CLUSTER_NAME = 'your-cluster-name'
+        GKE_ZONE = 'your-zone'
+        IMAGE_NAME = 'poc-app'
+    }
+    
+    stages {
+        stage('Build') {
+            steps {
+                script {
+                    sh '''
+                        docker build -t ${IMAGE_NAME} .
+                        docker tag ${IMAGE_NAME} gcr.io/${GCP_PROJECT_ID}/${IMAGE_NAME}:${BUILD_NUMBER}
+                    '''
+                }
+            }
+        }
+        
+        stage('Test') {
+            steps {
+                sh 'python -m pytest tests/'
+            }
+        }
+        
+        stage('Deploy') {
+            steps {
+                script {
+                    sh '''
+                        gcloud auth activate-service-account --key-file=${GCP_KEY_FILE}
+                        gcloud container clusters get-credentials ${GKE_CLUSTER_NAME} --zone ${GKE_ZONE} --project ${GCP_PROJECT_ID}
+                        kubectl apply -f k8s/
+                    '''
+                }
+            }
+        }
+    }
+}
+```
