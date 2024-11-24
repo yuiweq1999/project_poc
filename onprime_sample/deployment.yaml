@@ -1,0 +1,27 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: project-poc
+spec:
+  selector:
+    matchLabels:
+      app: project-poc
+  replicas: 2
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 1
+  template:
+    metadata:
+      labels:
+        app: project-poc
+    spec:
+      containers:
+        - name: project-poc-container
+          image: registry.hub.docker.com/yuiweq1999/sample:v1
+          imagePullPolicy: Always
+          ports:
+            - name: http
+              containerPort: 8080
+

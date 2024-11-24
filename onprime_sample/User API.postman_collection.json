@@ -1,0 +1,119 @@
+{
+	"info": {
+		"_postman_id": "6dabe030-0c17-4c09-9497-86259b79f04e",
+		"name": "User API",
+		"schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+	},
+	"item": [
+		{
+			"name": "Create User",
+			"request": {
+				"method": "POST",
+				"header": [],
+				"body": {
+					"mode": "raw",
+					"raw": "{\r\n    \"firstName\": \"first_name\",\r\n    \"lastName\": \"last_name\",\r\n    \"jobTitle\": \"developer\",\r\n    \"mobile\": \"09xx-xxx-xxx\"\r\n}",
+					"options": {
+						"raw": {
+							"language": "json"
+						}
+					}
+				},
+				"url": {
+					"raw": "http://35.221.161.93:8080/user/create",
+					"protocol": "http",
+					"host": [
+						"35",
+						"221",
+						"161",
+						"93"
+					],
+					"port": "8080",
+					"path": [
+						"user",
+						"create"
+					]
+				}
+			},
+			"response": []
+		},
+		{
+			"name": "Get User",
+			"request": {
+				"method": "GET",
+				"header": [],
+				"url": {
+					"raw": "http://35.221.161.93:8080/user/get",
+					"protocol": "http",
+					"host": [
+						"35",
+						"221",
+						"161",
+						"93"
+					],
+					"port": "8080",
+					"path": [
+						"user",
+						"get"
+					]
+				}
+			},
+			"response": []
+		},
+		{
+			"name": "Update User",
+			"request": {
+				"method": "PUT",
+				"header": [],
+				"body": {
+					"mode": "raw",
+					"raw": "{\r\n    \"firstName\": \"first_name\",\r\n    \"lastName\": \"last_name\",\r\n    \"jobTitle\": \"operator\",\r\n    \"mobile\": \"09oo-123-ooo\"\r\n}",
+					"options": {
+						"raw": {
+							"language": "json"
+						}
+					}
+				},
+				"url": {
+					"raw": "http://35.221.161.93:8080/user/update",
+					"protocol": "http",
+					"host": [
+						"35",
+						"221",
+						"161",
+						"93"
+					],
+					"port": "8080",
+					"path": [
+						"user",
+						"update"
+					]
+				}
+			},
+			"response": []
+		},
+		{
+			"name": "Delete User",
+			"request": {
+				"method": "DELETE",
+				"header": [],
+				"url": {
+					"raw": "http://35.221.161.93:8080/user/delete",
+					"protocol": "http",
+					"host": [
+						"35",
+						"221",
+						"161",
+						"93"
+					],
+					"port": "8080",
+					"path": [
+						"user",
+						"delete"
+					]
+				}
+			},
+			"response": []
+		}
+	]
+}
