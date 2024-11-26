@@ -242,6 +242,8 @@ data:
         name: google-cloud-sdk
         state: present
         update_cache: yes
+		
+		應該是專好sdk以後給好必要的權限設定直接連線不用安裝k8s
 
     - name: Install kubectl
       apt:
@@ -293,3 +295,27 @@ pipeline {
     }
 }
 ```
+
+
+========
+
+我的POC應該要有的內容：
+
+1.GKE設定
+
+*** 專案是從雲端(github)進到地端gitlab做deploy
+因為不能直接把github專案放到地端gitlab
+所以要做shell搬移(要用python啟動一個sever持續檢查) 或是用 nifi做持續檢查
+
+2.docker image打包動作(可能用docker build -t xxx專案 .) ->這邊應該是gitlab 或是 jenkins 自動化做 可以用nifi 監控落地後去執行
+3.GCR設定(可能可以用dockerhub代替或是harbor)
+4.建立GKE叢集(預設3個node) ->自動化腳本做
+5.可以看到所有的VM instance ->自動化腳本查看
+
+6.部署服務到該instance上 (這邊也可以加上applicationSet 方式用 ArgoCD去做) ->搭配Argo或是找到指定deploy做 自動化
+7.建立Service 開啟 nodePort 讓他可以被外部連線 ->自動化做
+8.建立 Ingress 讓外部流量進去 k8s 的時候能夠被導向指定app的端口 ->自動化做
+9.試著建立多個 app 到叢集 
+10.建立監控 (elk)
+
+

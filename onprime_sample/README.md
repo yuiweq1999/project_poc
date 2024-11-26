@@ -12,13 +12,13 @@ update user : http://35.221.161.93:8080/user/update
 delete user : http://35.221.161.93:8080/user/delete 
 
 ### Create User
-![create.png](create.png)
+
 
 ### Get User
-![get.png](get.png)
+
 
 ### Update User
-![update.png](update.png)
+
 
 ### Delete User
-![deleteuser.png](deleteuser.png)
+
